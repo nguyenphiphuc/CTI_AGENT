@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database & TTL Lifecycle | CTI Framework</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--glass-border); }
+        th { color: var(--neon-cyan); }
+        tr:hover { background: rgba(0, 243, 255, 0.05); }
+        .nav-bar { display: flex; gap: 20px; margin-bottom: 20px; align-items: center; justify-content: space-between; }
+        .nav-links { display: flex; gap: 15px; }
+        .nav-bar a { color: var(--text-main); text-decoration: none; font-weight: 600; padding: 10px; border-bottom: 2px solid transparent; }
+        .nav-bar a:hover { color: var(--neon-cyan); border-color: var(--neon-cyan); }
+        .active { color: var(--neon-cyan) !important; border-color: var(--neon-cyan) !important; }
+        .badge-active { background: rgba(0, 255, 136, 0.2); color: #00ff88; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; border: 1px solid #00ff88; }
+        .badge-expired { background: rgba(255, 68, 68, 0.2); color: #ff4444; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; border: 1px solid #ff4444; }
+        .btn-cleanup { background: linear-gradient(135deg, #00f3ff 0%, #0066ff 100%); color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-cleanup:hover { opacity: 0.9; transform: translateY(-1px); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Intelligence Database & TTL Lifecycle</h1>
+        <div class="subtitle">Quản lý vòng đời dữ liệu tình báo an ninh mạng (Data Aging Engine)</div>
+    </header>
+
+    <main>
+        <div class="nav-bar">
+            <div class="nav-links">
+                <a href="/">⬅ Trở về SOC Dashboard</a>
+                <a href="/static/database.html" class="active">Kho Raw Database & TTL</a>
+            </div>
+            <div>
+                <button class="btn-cleanup" onclick="runTtlCleanup()">⚡ Kích hoạt Quét Hết Hạn (TTL Cleanup)</button>
+            </div>
+        </div>
+
+        <div class="glass-panel">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Danh sách Chỉ số Thỏa hiệp (IoCs & Dynamic TTL)</h2>
+                <div id="ioc-summary" style="font-size:13px; color:var(--text-muted);">Đang tải...</div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Loại</th>
+                        <th>Giá trị</th>
+                        <th>Nguồn CTI</th>
+                        <th>Thời hạn (TTL)</th>
+                        <th>Hết hạn lúc</th>
+                        <th>Trạng thái Vòng đời</th>
+                    </tr>
+                </thead>
+                <tbody id="ioc-tbody">
+                    <tr><td colspan="6">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="glass-panel" style="margin-top:25px;">
+            <h2>Quy tắc Phòng Thủ Tự Động (Sigma / YARA)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Loại Rule</th>
+                        <th>Tên Rule</th>
+                        <th>MITRE Kỹ thuật</th>
+                        <th>Mô tả</th>
+                        <th>Nội dung (Trích đoạn)</th>
+                    </tr>
+                </thead>
+                <tbody id="rule-tbody">
+                    <tr><td colspan="5">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        async function runTtlCleanup() {
+            try {
+                const res = await fetch('/api/iocs/expire-cleanup', { method: 'POST' });
+                const json = await res.json();
+                alert(json.message);
+                loadDatabase();
+            } catch(e) {
+                alert("Lỗi quét TTL: " + e.message);
+            }
+        }
+
+        async function loadDatabase() {
+            try {
+                const res = await fetch('/api/database');
+                const data = await res.json();
+                
+                const iocs = data.iocs || [];
+                const rules = data.rules || [];
+
+                const activeCount = iocs.filter(i => !i.is_expired).length;
+                const expiredCount = iocs.filter(i => i.is_expired).length;
+                document.getElementById('ioc-summary').innerHTML = `Tổng: <strong>${iocs.length}</strong> | Tươi mới (Active): <strong style="color:#00ff88">${activeCount}</strong> | Quá hạn (Expired): <strong style="color:#ff4444">${expiredCount}</strong>`;
+
+                const iocBody = document.getElementById('ioc-tbody');
+                if(iocs.length === 0) {
+                    iocBody.innerHTML = "<tr><td colspan='6'>Chưa có IoC nào được lưu. Hãy khởi động chu kỳ cào tin!</td></tr>";
+                } else {
+                    iocBody.innerHTML = iocs.map(ioc => {
+                        const isExpired = ioc.is_expired === 1;
+                        const badge = isExpired 
+                            ? `<span class="badge-expired">EXPIRED (Outdated)</span>` 
+                            : `<span class="badge-active">ACTIVE (Đang bảo vệ)</span>`;
+                        const src = ioc.source_type === 'tactical' ? '<span style="color:#00f3ff">Tactical Feed</span>' : '<span style="color:#a855f7">Narrative News</span>';
+                        return `<tr>
+                            <td><span style="color:var(--neon-purple); font-weight:700;">${ioc.ioc_type.toUpperCase()}</span></td>
+                            <td><code>${ioc.ioc_value}</code></td>
+                            <td>${src}</td>
+                            <td>${ioc.ttl_days || 14} ngày</td>
+                            <td style="font-size:12px; color:var(--text-muted);">${ioc.expires_at ? ioc.expires_at.substring(0, 19).replace('T', ' ') : 'N/A'}</td>
+                            <td>${badge}</td>
+                        </tr>`;
+                    }).join('');
+                }
+
+                const ruleBody = document.getElementById('rule-tbody');
+                if(rules.length === 0) {
+                    ruleBody.innerHTML = "<tr><td colspan='5'>Chưa có Rule nào được lưu.</td></tr>";
+                } else {
+                    ruleBody.innerHTML = rules.map(r => {
+                        const mitre = r.mitre_technique_id ? `<span style="color:#00f3ff; font-weight:bold;">${r.mitre_technique_id}</span>` : '<span style="color:gray;">N/A</span>';
+                        return `<tr>
+                            <td><span style="color:var(--neon-blue); font-weight:bold;">${r.rule_type.toUpperCase()}</span></td>
+                            <td><strong>${r.rule_name}</strong></td>
+                            <td>${mitre}</td>
+                            <td style="font-size:12px;">${r.description || ''}</td>
+                            <td><pre style="margin:0; padding:8px; font-size:11px; max-height: 120px; overflow-y:auto; background:rgba(0,0,0,0.4); border-radius:4px;">${r.rule_content}</pre></td>
+                        </tr>`;
+                    }).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        loadDatabase();
+    </script>
+</body>
+</html>

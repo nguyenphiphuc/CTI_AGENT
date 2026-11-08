@@ -1,0 +1,25 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- SQLite runtime (không commit dữ liệu vận hành) ---
+*.db
+*.db-wal
+*.db-shm
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# --- Web sandbox test artifacts ---
+cti_framework/sandbox/web_root/tmp/
+
+# --- External & Backup folders ---
+wazuh-docker/
+backups/
+14b/

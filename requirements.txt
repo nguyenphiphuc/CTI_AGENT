@@ -1,0 +1,12 @@
+# CTI Agent Framework — phụ thuộc runtime (môi trường cục bộ)
+# Cài: py -3.13 -m pip install -r requirements.txt
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+pydantic>=2.6,<3.0
+requests>=2.31,<3.0
+feedparser>=6.0,<7.0
+PyYAML>=6.0,<7.0
+urllib3>=2.0,<3.0
+
+# Ghi chú: mô hình LLM chạy NGOÀI tiến trình này qua Ollama (http://localhost:11434)
+#           — không cần pip cài gì thêm cho phần LLM.
